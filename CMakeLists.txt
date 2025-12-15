@@ -1,32 +1,40 @@
-set(CMAKE_C_COMPILER "$ENV{GCC_FQ_DIR}/bin/gcc")
-set(CMAKE_CXX_COMPILER "$ENV{GCC_FQ_DIR}/bin/g++")
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++1y -g -rdynamic " )
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} $ENV{G4LIB} $ENV{ROOTSYS}/etc/cmake)
+cmake_minimum_required(VERSION 3.16)
+project(NuBeam LANGUAGES CXX)
 
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(GNUInstallDirs)
 
-project(NuBeam)
+option(WITH_GEANT4_UIVIS "Enable Geant4 UI and visualization drivers" ON)
 
-#----------------------------------------------------------------------------
-# Find Geant4 package, activating all available UI and Vis drivers by default
-# You can set WITH_GEANT4_UIVIS to OFF via the command line or ccmake/cmake-gui
-# to build a batch mode only executable
-#
+# --- Dependencies -------------------------------------------------------------
+# Geant4 10.4 uses the old style (variables + Geant4_USE_FILE). Try components;
+# fall back gracefully if targets aren’t exported.
 if(WITH_GEANT4_UIVIS)
-  find_package(Geant4 REQUIRED ui_all vis_all)
+  find_package(Geant4 10.4 REQUIRED COMPONENTS gdml ui_all vis_all)
 else()
-  find_package(Geant4 REQUIRED)
+  find_package(Geant4 10.4 REQUIRED COMPONENTS gdml)
 endif()
 
-#----------------------------------------------------------------------------
-# Setup Geant4 include directories and compile definitions
-#
-include(${Geant4_USE_FILE})
+# If the old helper is provided, include it (sets include dirs/defs/flags).
+if(DEFINED Geant4_USE_FILE)
+  include(${Geant4_USE_FILE})
+endif()
 
-#----------------------------------------------------------------------------
-# Setup root
-#
-find_package(ROOT REQUIRED)   
+find_package(ROOT 6.00 CONFIG REQUIRED COMPONENTS Core RIO Tree Hist)
+
+# dk2nu finder lives here
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(DK2NU REQUIRED)
+
+# Warnings
+if(MSVC)
+  add_compile_options(/permissive- /W3)
+else()
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 add_subdirectory(src)
 add_subdirectory(scripts)
+

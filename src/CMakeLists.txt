@@ -1,28 +1,40 @@
-#----------------------------------------------------------------------------
-# Locate sources and headers for this project
-#
-set(DK2NU $ENV{DK2NU})
-set(ROOTSYS $ENV{ROOTSYS})
-
-include_directories(${PROJECT_SOURCE_DIR}/include 
-		    ${PROJECT_SOURCE_DIR}/physics
-                    ${Geant4_INCLUDE_DIR}
-		    ${DK2NU}/include
-		    ${ROOTSYS}/include )	    
-
-file(GLOB sources  ${PROJECT_SOURCE_DIR}/src/*.cc)
-
+file(GLOB sources "${PROJECT_SOURCE_DIR}/src/*.cc")
 add_executable(NuBeam ${sources})
-target_link_libraries(NuBeam  ${Geant4_LIBRARIES} ${ROOT_LIBRARIES} ${DK2NU}/lib/libdk2nuTree.so) 
 
-add_custom_command(TARGET NuBeam
-	           COMMAND ups active | grep -e Active -e gcc -e geant4 -e dk2nu -e cmake -e jobsub -e ifdhc -e boost > upssetup.tmp
-                   COMMAND objcopy --add-section ups_setup=upssetup.tmp NuBeam
-                   DEPENDS NuBeam
-                   COMMENT "Embedding ups setup into binary.\n\tobjcopy --dump-section ups_setup=/dev/stdout NuBeam\nStored environment will be reproduced automatically with submitJobs.py script.")
+target_include_directories(NuBeam
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/physics
+)
 
-#----------------------------------------------------------------------------
-# Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX
-#
-install(TARGETS NuBeam  DESTINATION ${PROJECT_SOURCE_DIR}/bin/$ENV{GEANT4_VERSION})
+# Prefer modern targets if they exist (newer G4); otherwise use legacy variables.
+if(TARGET Geant4::G4global)
+  target_link_libraries(NuBeam
+    PRIVATE
+      Geant4::G4global
+      Geant4::G4gdml
+      ROOT::Core ROOT::RIO ROOT::Tree ROOT::Hist
+      ROOT::Physics ROOT::GenVector ROOT::MathCore
+      ROOT::Matrix
+      DK2NU::Tree
+  )
+  if(TARGET Geant4::G4UI_all)
+    target_link_libraries(NuBeam PRIVATE Geant4::G4UI_all)
+  endif()
+  if(TARGET Geant4::G4vis_all)
+    target_link_libraries(NuBeam PRIVATE Geant4::G4vis_all)
+  endif()
+else()
+  # Legacy (G4 10.4): Geant4_USE_FILE already added include dirs / defs.
+  target_link_libraries(NuBeam
+    PRIVATE
+      ${Geant4_LIBRARIES}
+      ROOT::Core ROOT::RIO ROOT::Tree ROOT::Hist
+      ROOT::Physics ROOT::GenVector ROOT::MathCore
+      ROOT::Matrix
+      DK2NU::Tree
+  )
+endif()
+
+install(TARGETS NuBeam RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

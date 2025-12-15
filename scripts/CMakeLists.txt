@@ -1,14 +1,22 @@
-set(BOOSTLIB "-L$ENV{BOOST_LIB} -lboost_program_options")
-
-include_directories($ENV{DK2NUDATA_INC}
-		    $ENV{ROOT_INC})
-#include BOOST as system (-isystem instead of -I) to suppress compiler warnings
-include_directories(SYSTEM $ENV{BOOST_INC})
-
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")
+# Silence CMP0167 by using CONFIG mode.
+find_package(Boost 1.66 CONFIG REQUIRED COMPONENTS program_options)
 
 add_executable(beamHist beamHist.cc)
-target_link_libraries(beamHist ${ROOT_LIBRARIES} $ENV{DK2NUDATA_LIB}/libdk2nuTree.so ${BOOSTLIB})
 
-install(TARGETS beamHist  DESTINATION ${PROJECT_SOURCE_DIR}/bin/$ENV{GEANT4_VERSION})
-install(PROGRAMS submitBeam.py compare.py mergeHist.py DESTINATION ${PROJECT_SOURCE_DIR}/bin/$ENV{GEANT4_VERSION})
+target_link_libraries(beamHist
+  PRIVATE
+    ROOT::Core ROOT::RIO ROOT::Tree ROOT::Hist
+    ROOT::Physics ROOT::GenVector ROOT::MathCore ROOT::Matrix
+    DK2NU::Tree
+    Boost::program_options
+)
+
+target_include_directories(beamHist
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+install(TARGETS beamHist RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(PROGRAMS submitBeam.py compare.py mergeHist.py
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+
