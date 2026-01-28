@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(GNUInstallDirs)
+# Keep RPATH in installed binaries and derive it automatically from link dirs
+set(CMAKE_SKIP_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 option(WITH_GEANT4_UIVIS "Enable Geant4 UI and visualization drivers" ON)
 
