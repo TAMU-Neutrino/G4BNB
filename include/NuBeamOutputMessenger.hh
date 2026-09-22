@@ -25,6 +25,7 @@ class NuBeamOutputMessenger: public G4UImessenger
   G4UIdirectory*             fDirectory;
   G4UIcmdWithAString*        fOutputFileName;
   G4UIcmdWithABool*          fSaveProductionNtuple;
+  G4UIcmdWithABool*          fSaveMesonNtuple;
   G4UIcommand*               fBoundaryNtuple;
   G4UIcmdWithADoubleAndUnit* fNuEnergyThrCmd;
   G4UIcmdWithADoubleAndUnit* fPionMomentumThrCmd;

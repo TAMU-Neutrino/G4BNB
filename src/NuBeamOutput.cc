@@ -36,6 +36,8 @@
 #include "G4LogicalVolumeStore.hh"
 #include "G4LogicalVolume.hh"
 #include "G4FieldManager.hh"
+#include "G4VProcess.hh"
+#include "G4Material.hh"
 
 #include "dk2nu/tree/dk2nu.h"
 #include "dk2nu/tree/dkmeta.h"
@@ -71,7 +73,7 @@ NuBeamOutput::~NuBeamOutput()
 }
 
 
-void NuBeamOutput::RecordBeginOfRun(const G4Run*)
+void NuBeamOutput::RecordBeginOfRun(const G4Run* run)
 {
   fDk2Nu  = new bsim::Dk2Nu;
   fDkMeta = new bsim::DkMeta;
@@ -81,7 +83,34 @@ void NuBeamOutput::RecordBeginOfRun(const G4Run*)
   fOutTreeDk2Nu->Branch("dk2nu", "bsim::Dk2Nu", &fDk2Nu, 32000, 99);
   fOutTreeDk2NuMeta  = new TTree("dkmetaTree", "Neutrino ntuple, dk2Nu format, metadata");
   fOutTreeDk2NuMeta->Branch("dkmeta", "bsim::DkMeta", &fDkMeta, 32000,99);
-  this->fillDkMeta();   
+  this->fillDkMeta();
+  if (fSaveMesonNtuple) {
+    fMesonRun = run->GetRunID();
+    const auto* geometry = static_cast<const NuBeamGeometryConstruction*>(
+        G4RunManager::GetRunManager()->GetUserDetectorConstruction());
+    fMesonHorn = geometry->GetLocalField()->GetHornCurrent() / CLHEP::ampere;
+    fMesonSkinHorn = geometry->GetSkinDepthField()->GetSkinDepthHornCurrent() / CLHEP::ampere;
+    fMesonTree = new TTree("mesonTree", "Meson census; p4 GeV, position cm, time ns; stage 0=birth 1=decay");
+    fMesonTree->Branch("event", &fMesonEvent);
+    fMesonTree->Branch("track", &fMesonTrack);
+    fMesonTree->Branch("parent", &fMesonParent);
+    fMesonTree->Branch("pdg", &fMesonPDG);
+    fMesonTree->Branch("stage", &fMesonStage);
+    fMesonTree->Branch("process_type", &fMesonProcessType);
+    fMesonTree->Branch("quasielastic", &fMesonQE);
+    fMesonTree->Branch("process", &fMesonProcess);
+    fMesonTree->Branch("material", &fMesonMaterial);
+    fMesonTree->Branch("p4", fMesonP4, "p4[4]/D");
+    fMesonTree->Branch("position", fMesonPosition, "position[3]/D");
+    fMesonTree->Branch("time", &fMesonTime);
+    fMesonTree->Branch("weight", &fMesonWeight);
+    fMesonMetaTree = new TTree("mesonMeta", "Completed exposure and actual horn currents");
+    fMesonMetaTree->Branch("schema", &fMesonSchema);
+    fMesonMetaTree->Branch("run", &fMesonRun);
+    fMesonMetaTree->Branch("pot", &fMesonPOT);
+    fMesonMetaTree->Branch("horn_current_A", &fMesonHorn);
+    fMesonMetaTree->Branch("skin_current_A", &fMesonSkinHorn);
+  }
 
   if (fSaveProductionNtuple) {
     G4cout<<"Creating aux tree: production"<<G4endl;
@@ -117,7 +146,9 @@ void NuBeamOutput::fillDkMeta()
    fDkMeta->physics = G4Version;
    //   fDkMeta->physcuts = theRunManager->GetPhysicsListName();
    fDkMeta->tgtcfg = std::string("BNB");
-   fDkMeta->horncfg = std::string("FHC");
+   const auto* geometry = static_cast<const NuBeamGeometryConstruction*>(theRunManager->GetUserDetectorConstruction());
+   const double current = geometry->GetLocalField()->GetHornCurrent();
+   fDkMeta->horncfg = current > 0 ? "FHC" : (current < 0 ? "RHC" : "OFF");
    fDkMeta->dkvolcfg = std::string("Air");
    //
    // Beam parameters 
@@ -144,12 +175,20 @@ void NuBeamOutput::fillDkMeta()
    fDkMeta->location.push_back(alocationT600);
    bsim::Location alocationSBND(73.78, 0.  , 11000., std::string("SBND"));
    fDkMeta->location.push_back(alocationSBND);
-   fOutTreeDk2NuMeta->Fill();
+   // Metadata is filled at end of run with the completed exposure.
 }
 
-void NuBeamOutput::RecordEndOfRun(const G4Run* )
+void NuBeamOutput::RecordEndOfRun(const G4Run* run)
 {
   fOutFileDk2Nu->cd();
+  fDkMeta->pots = run->GetNumberOfEvent();
+  fOutTreeDk2NuMeta->Fill();
+  if (fSaveMesonNtuple) {
+    fMesonPOT = run->GetNumberOfEvent();
+    fMesonMetaTree->Fill();
+    fMesonTree->Write();
+    fMesonMetaTree->Write();
+  }
   if (fSaveProductionNtuple) fProductionTree->Write(); 
   for (unsigned int i=0; i<fBoundaryNtp.size();i++) 
       fBoundaryNtp[i].fTree->Write();
@@ -183,8 +222,47 @@ void NuBeamOutput::RecordpBeInteraction(G4HadFinalState* aParticleChange)
   }
   fProductionTree->Fill();
 }
-void NuBeamOutput::RecordBeginOfEvent(const G4Event*)
+void NuBeamOutput::RecordBeginOfEvent(const G4Event* event)
 {
+  fMesonEvent = event->GetEventID();
+  fMesonSeen.clear();
+}
+
+void NuBeamOutput::RecordMeson(const G4Track* track, int stage, const G4StepPoint* point)
+{
+  if (!fSaveMesonNtuple || !fMesonTree) return;
+  const int pdg = track->GetDefinition()->GetPDGEncoding();
+  if (abs(pdg) != 211 && abs(pdg) != 321 && pdg != 111) return;
+  // Elastic ancestry splitting creates a continuation, not a produced meson.
+  const auto* birthProcess = track->GetCreatorProcess();
+  if (stage == 0 && birthProcess &&
+      (birthProcess->GetProcessName() == "BooNEHadronElastic" ||
+       birthProcess->GetProcessName() == "hadElastic")) stage = 2;
+  if (!fMesonSeen.insert({track->GetTrackID(), stage}).second) return;
+  fMesonPDG = pdg;
+  fMesonTrack = track->GetTrackID();
+  fMesonParent = track->GetParentID();
+  fMesonStage = stage;
+  auto* creator = track->GetCreatorProcess();
+  fMesonProcess = creator ? std::string(creator->GetProcessName()) : "Primary";
+  fMesonProcessType = creator ? int(creator->GetProcessType()) : 0;
+  const auto* info = dynamic_cast<const NuBeamTrackInformation*>(track->GetUserInformation());
+  fMesonQE = info && info->GetCreatorWasQE();
+  const auto pos = track->GetPosition();
+  const auto mom = point ? point->GetMomentum() : track->GetMomentum();
+  const double energy = point ? point->GetTotalEnergy() : track->GetTotalEnergy();
+  fMesonP4[0] = energy / CLHEP::GeV;
+  for (int i=0; i<3; ++i) {
+    fMesonP4[i+1] = mom[i] / CLHEP::GeV;
+    fMesonPosition[i] = pos[i] / CLHEP::cm;
+  }
+  fMesonTime = track->GetGlobalTime() / CLHEP::ns;
+  fMesonWeight = track->GetWeight();
+  const auto* volume = track->GetVolume();
+  const auto* material = point ? point->GetMaterial() :
+      (volume ? volume->GetLogicalVolume()->GetMaterial() : nullptr);
+  fMesonMaterial = material ? std::string(material->GetName()) : "unknown";
+  fMesonTree->Fill();
 }
 
 void NuBeamOutput::RecordEndOfEvent(const G4Event*)
@@ -438,6 +516,11 @@ void NuBeamOutput::RecordEndOfTrack(const G4Track*)
 
 void NuBeamOutput::RecordStep(const G4Step* aStep)
 {
+  const auto* process = aStep->GetPostStepPoint()->GetProcessDefinedStep();
+  if (process && process->GetProcessType() == fDecay) {
+    // Pre-step momentum is the parent's momentum, before its decay removes it.
+    RecordMeson(aStep->GetTrack(), 1, aStep->GetPreStepPoint());
+  }
   for (unsigned int i=0; i<fBoundaryNtp.size();i++) {
     G4String preStepVolName;
     G4String postStepVolName;

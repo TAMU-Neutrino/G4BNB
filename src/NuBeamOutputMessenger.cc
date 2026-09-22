@@ -30,6 +30,12 @@ NuBeamOutputMessenger::NuBeamOutputMessenger(NuBeamOutput* O)
   fSaveProductionNtuple->SetParameterName("saveProductionNtuple",true,false);
   fSaveProductionNtuple->SetDefaultValue(false);
 
+  fSaveMesonNtuple = new G4UIcmdWithABool("/boone/output/saveMesonNtuple", this);
+  fSaveMesonNtuple->SetGuidance("Record meson births before cuts and actual charged-meson decays");
+  fSaveMesonNtuple->SetParameterName("saveMesonNtuple", true, false);
+  fSaveMesonNtuple->SetDefaultValue(false);
+  fSaveMesonNtuple->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   G4UIparameter* param;
   fBoundaryNtuple=new G4UIcommand("/boone/output/boundaryNtuple",this);
   fBoundaryNtuple->SetGuidance("Save particles at boundary of two volumes (exitVolume and enterVolume)");
@@ -75,6 +81,8 @@ NuBeamOutputMessenger::NuBeamOutputMessenger(NuBeamOutput* O)
 NuBeamOutputMessenger::~NuBeamOutputMessenger()
 {
   delete fOutputFileName;
+  delete fSaveMesonNtuple;
+  delete fSaveProductionNtuple;
   delete fNuEnergyThrCmd;
   delete fPionMomentumThrCmd;
   delete fMuonMomentumThrCmd;
@@ -89,6 +97,9 @@ void NuBeamOutputMessenger::SetNewValue(G4UIcommand * command,G4String newValue)
 
   if(command == fSaveProductionNtuple) 
     fOutput->SaveProductionNtuple(StoB(newValue));
+
+  if(command == fSaveMesonNtuple)
+    fOutput->SaveMesonNtuple(StoB(newValue));
 
   if(command == fBoundaryNtuple) {
     G4Tokenizer next(newValue);

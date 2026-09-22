@@ -29,6 +29,7 @@ public:
     { return pMyField; }
   inline void SetLocalField(NuBeamLocalField* aValue)
     { pMyField = aValue; }
+  NuBeamSkinDepthField* GetSkinDepthField() const { return pMySkinDepthField; }
   G4ThreeVector GetAbsolutePosition(G4String volString);
 
 private:

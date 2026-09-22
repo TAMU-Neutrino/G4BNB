@@ -2,6 +2,7 @@
 #define NuBeamOutput_h 1 
 #include <iostream>
 #include <sstream>
+#include <set>
 #include "globals.hh"
 #include "G4Run.hh"
 #include "G4Event.hh"
@@ -74,6 +75,8 @@ public:
   void RecordEndOfTrack(const G4Track*);
   void RecordStep(const G4Step*);
   void RecordNeutrino(const G4Track*);
+  void RecordMeson(const G4Track*, int stage, const G4StepPoint* point = nullptr);
+  void SaveMesonNtuple(bool val) { fSaveMesonNtuple = val; }
 
   void RecordpBeInteraction(G4HadFinalState* aParticleChange);
     
@@ -129,6 +132,17 @@ private:
   TTree*        fOutTreeDk2NuMeta;
   bsim::Dk2Nu*  fDk2Nu;
   bsim::DkMeta* fDkMeta;
+
+  bool fSaveMesonNtuple = false;
+  TTree* fMesonTree = nullptr;
+  TTree* fMesonMetaTree = nullptr;
+  int fMesonEvent = 0, fMesonTrack = 0, fMesonParent = 0;
+  int fMesonPDG = 0, fMesonStage = 0, fMesonProcessType = 0;
+  int fMesonQE = 0, fMesonRun = 0, fMesonSchema = 2;
+  double fMesonP4[4], fMesonPosition[3], fMesonTime = 0, fMesonWeight = 0;
+  double fMesonPOT = 0, fMesonHorn = 0, fMesonSkinHorn = 0;
+  std::string fMesonProcess, fMesonMaterial;
+  std::set<std::pair<int, int>> fMesonSeen;
 
   bool   fSaveProductionNtuple;
   TTree* fProductionTree;

@@ -13,6 +13,7 @@
 #include "NuBeamTrackInformation.hh"
 #include "NuBeamTrajectory.hh"
 #include "NuBeamRunManager.hh"
+#include "NuBeamOutput.hh"
 
 NuBeamStackingAction::NuBeamStackingAction()
 { 
@@ -26,6 +27,8 @@ G4ClassificationOfNewTrack NuBeamStackingAction::ClassifyNewTrack(const G4Track 
 {
   G4ClassificationOfNewTrack classification = fUrgent;
 
+  const auto* manager = static_cast<const NuBeamRunManager*>(G4RunManager::GetRunManager());
+  manager->GetRecordPtr()->RecordMeson(aTrack, 0);
   KillEMParticles(classification, aTrack);
   KillThresholdParticles(classification, aTrack);
 

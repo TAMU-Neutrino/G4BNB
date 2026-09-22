@@ -106,7 +106,8 @@ G4VPhysicalVolume* NuBeamGeometryConstruction::Construct()
   
   static G4bool SkinDepthFieldIsInitialized = false;
   if(!SkinDepthFieldIsInitialized) {
-    NuBeamSkinDepthField* mySkinDepthField = new NuBeamSkinDepthField();
+    pMySkinDepthField = new NuBeamSkinDepthField();
+    NuBeamSkinDepthField* mySkinDepthField = pMySkinDepthField;
     G4FieldManager* SkinDepthFieldMgr = new G4FieldManager();
     G4LogicalVolumeStore* pLVStore = G4LogicalVolumeStore::GetInstance();
     for (size_t i=0; i<pLVStore->size(); i++) {
