@@ -11,6 +11,7 @@
 #include "G4Neutron.hh"
 #include "G4UImanager.hh"
 #include "BooNEHadronCrossSectionsMessenger.hh"
+#include <map>
 
 class BooNEHadronCrossSections
 {
@@ -48,6 +49,13 @@ public:
   G4double GetInelasticCrossSection(const G4DynamicParticle* aParticle,
 				    G4int Z, G4int A);
   
+  // Additive offsets in mb applied on top of the parametrised total, inelastic and
+  // quasi-elastic cross sections (systematic variations, PRD 79 072002 Table XIII).
+  // key = <tot|ine|qel><Pro|Neu|Pip|Pim><Be|Al>, e.g. "qelPipBe"
+  void SetCrossSectionOffset(const G4String& key, G4double mb) { fOffsets[key] = mb; }
+  G4double CrossSectionOffset(const G4DynamicParticle* aParticle, G4int Z, G4int A,
+                              const char* kind) const;
+
   // accessor for momentum ranges
   G4double GetProtonBeMomentumMin()     { return pBeMin;   }
   G4double GetNeutronBeMomentumMin()    { return nBeMin;   }
@@ -152,6 +160,7 @@ public:
   }
   
 private:
+  std::map<G4String, G4double> fOffsets;
 
   // momentum validity ranges 
   G4double pBeMin,   pBeMax,   pAlMin,   pAlMax; 

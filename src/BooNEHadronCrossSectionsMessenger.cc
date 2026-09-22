@@ -5,6 +5,7 @@
 #include "G4UIcmdWithADoubleAndUnit.hh"
 #include "G4UIcmdWithAnInteger.hh"
 #include "G4UIcmdWithABool.hh"
+#include "G4UIcmdWithADouble.hh"
 #include "G4ios.hh"
 #include "globals.hh"
 #include "G4UIdirectory.hh"
@@ -471,10 +472,27 @@ BooNEHadronCrossSectionsMessenger::BooNEHadronCrossSectionsMessenger(BooNEHadron
   param = new G4UIparameter("qelPimAlXsecPar8",'d',true);  param->SetDefaultValue(   1.383   ); qelPimAlXsecParCmd->SetParameter(param);
   param = new G4UIparameter("qelPimAlXsecPar9",'d',true);  param->SetDefaultValue(   0.000   ); qelPimAlXsecParCmd->SetParameter(param);
 
+  // Additive cross-section offsets in mb for systematic variations
+  // (/boone/crosssections/<species>/<tot|ine|qel><Pro|Neu|Pip|Pim><Be|Al>XsecOffset value)
+  const char* offDirs[4]  = {"proton", "neutron", "pionplus", "pionminus"};
+  const char* offTags[4]  = {"Pro", "Neu", "Pip", "Pim"};
+  const char* offKinds[3] = {"tot", "ine", "qel"};
+  const char* offMats[2]  = {"Be", "Al"};
+  for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) for (int m = 0; m < 2; ++m) {
+    G4String key = G4String(offKinds[k]) + offTags[i] + offMats[m];
+    G4String path = G4String("/boone/crosssections/") + offDirs[i] + "/" + key + "XsecOffset";
+    G4UIcmdWithADouble* cmd = new G4UIcmdWithADouble(path, this);
+    G4String guidance = "Additive offset (mb) applied to the parametrised " + key + " cross section";
+    cmd->SetGuidance(guidance.c_str());
+    cmd->SetParameterName("offset_mb", false);
+    cmd->SetDefaultValue(0.);
+    offsetCmds[cmd] = key;
+  }
 }
 
 BooNEHadronCrossSectionsMessenger::~BooNEHadronCrossSectionsMessenger()
 {
+  for (std::map<G4UIcommand*, G4String>::iterator it = offsetCmds.begin(); it != offsetCmds.end(); ++it) delete it->first;
 
   delete booneCrossSectionsDirectory;
   delete booneProtonCrossSectionsDirectory;
@@ -525,6 +543,12 @@ void BooNEHadronCrossSectionsMessenger::SetNewValue(G4UIcommand * command,G4Stri
 {
 
   G4Tokenizer next(newValues );
+
+  std::map<G4UIcommand*, G4String>::iterator offset = offsetCmds.find(command);
+  if (offset != offsetCmds.end()) {
+    theBooNEHadronCrossSections->SetCrossSectionOffset(offset->second, G4UIcmdWithADouble::GetNewDoubleValue(newValues));
+    return;
+  }
 
   // momentum range
   if (command == proBeMomentumRangeCmd){

@@ -3,6 +3,7 @@
 
 #include "globals.hh"
 #include "G4UImessenger.hh"
+#include <map>
 
 class BooNEHadronCrossSections;
 class G4UIdirectory;
@@ -23,6 +24,7 @@ public:
 private:
 
   BooNEHadronCrossSections* theBooNEHadronCrossSections;
+  std::map<G4UIcommand*, G4String> offsetCmds;  // <kind><tag><mat>XsecOffset commands
 
   G4UIdirectory*  booneCrossSectionsDirectory;
   G4UIdirectory*  booneProtonCrossSectionsDirectory;

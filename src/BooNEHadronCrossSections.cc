@@ -170,6 +170,7 @@ BooNEHadronCrossSections::GetTotalCrossSection(const G4DynamicParticle* aParticl
   }
 
   // add units
+  theCrossSection += CrossSectionOffset(aParticle, ZNucleus, ANucleus, "tot");
   return theCrossSection * CLHEP::millibarn;
 
 }
@@ -321,6 +322,7 @@ BooNEHadronCrossSections::GetQuasiElasticCrossSection(const G4DynamicParticle* a
   }
 
   // add units
+  theCrossSection += CrossSectionOffset(aParticle, ZNucleus, ANucleus, "qel");
   return theCrossSection * CLHEP::millibarn;
 }
 
@@ -462,6 +464,7 @@ BooNEHadronCrossSections::GetInelasticCrossSection(const G4DynamicParticle* aPar
   }
 
   // add units
+  theCrossSection += CrossSectionOffset(aParticle, ZNucleus, ANucleus, "ine");
   return theCrossSection * CLHEP::millibarn;// - theQuasiElasticCrossSection;
 
 }
@@ -575,3 +578,22 @@ ReggeWithThreshold(G4double p, G4double p0, G4double s,
   return threshold * regge;
 }
 
+
+G4double
+BooNEHadronCrossSections::CrossSectionOffset(const G4DynamicParticle* aParticle, G4int Z, G4int A,
+                                             const char* kind) const
+{
+  if (fOffsets.empty()) return 0.;
+  const char* tag = 0;
+  if      (aParticle->GetDefinition() == G4Proton::Proton())       tag = "Pro";
+  else if (aParticle->GetDefinition() == G4Neutron::Neutron())     tag = "Neu";
+  else if (aParticle->GetDefinition() == G4PionPlus::PionPlus())   tag = "Pip";
+  else if (aParticle->GetDefinition() == G4PionMinus::PionMinus()) tag = "Pim";
+  else return 0.;
+  const char* mat = 0;
+  if      (Z == 4  && A == 9)  mat = "Be";
+  else if (Z == 13 && A == 27) mat = "Al";
+  else return 0.;
+  std::map<G4String, G4double>::const_iterator it = fOffsets.find(G4String(kind) + tag + mat);
+  return it == fOffsets.end() ? 0. : it->second;
+}
