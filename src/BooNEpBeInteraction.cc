@@ -1,3 +1,4 @@
+#include "BooNETableInterpolation.hh"
 #include "BooNEpBeInteractionMessenger.hh"
 #include "BooNEpBeInteraction.hh"
 #include "BooNEHadronPhysics.hh"
@@ -1765,101 +1766,20 @@ G4double BooNEpBeInteraction::GetMax(G4double Array[kNProtonMomentumBins][kNPzBi
   return maxVal;
 }
     
-G4double BooNEpBeInteraction::GetTotalProductionXSect(G4double Array[kNProtonMomentumBins][kNPzBins][kNPtBins], G4int iprotonp){
-  G4double sum = 0.;
-  for(G4int iipz=0; iipz < kNPzBins; iipz++){
-    for(G4int iipt=0; iipt < kNPtBins; iipt++){
-      sum = sum + Array[iprotonp][iipz][iipt]*(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
-    }
-  }
-  return sum;
+G4double BooNEpBeInteraction::GetTotalProductionXSect(G4double Array[kNProtonMomentumBins][kNPzBins][kNPtBins], G4int iprotonp) {
+  // Callers multiply by nominal bin widths; return the exact integral divided
+  // by those widths. Integrate exactly the domain used by momentum sampling.
+  const double integral=boone_table::integral<kNPzBins,kNPtBins>(
+      Array,iprotonp,fPzVec,fPtVec,0.,fPzVec[kNPzBins-1],0.,1.);
+  return integral/((fPzVec[1]-fPzVec[0])*(fPtVec[1]-fPtVec[0]))
+      *(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
 }
 
-// -----------------------------------------------------------------------------------
-
-G4double BooNEpBeInteraction::GetInterpolatedXSec(G4double XSecArray[kNProtonMomentumBins][kNPzBins][kNPtBins],
-						  G4double protonMomentum,
-						  G4double daughterPz,
-						  G4double daughterPt)
-{
-  G4double ZerothOrderValue;
-  G4double FirstOrderCorrection_x = 0;
-  G4double FirstOrderCorrection_y = 0;
-  G4double FirstOrderCorrection_z = 0;
-  G4double FirstOrderCorrection;
-  G4int jpz1, jpz2, jpt1, jpt2, midBin;
-
-  // Verify that the input values are valid
-  if (daughterPz < 0.) {
-    G4cout << "ERROR in BooNEpBeInteraction::GetInterpolatedXSec: "
-	   << "daughterPz (=" << daughterPz << ") < 0." << G4endl;
-    G4cout << "     setting daughterPz to 0." << G4endl;
-    daughterPz = 0.;
-  }
-
-  // Find protonp bin (jprotonp1)
-  G4int jprotonp1 = 0;
-  G4int jprotonp2 = kNProtonMomentumBins - 1;
-  do {
-    midBin = (jprotonp1 + jprotonp2)/2;
-    if (protonMomentum/CLHEP::GeV < fProtonMomentumBins[midBin] )
-      jprotonp2 = midBin;
-    else
-      jprotonp1 = midBin;
-  } while (jprotonp2 - jprotonp1 > 1);
-
-  // Find pz bin (jpz1)
-  jpz1 = 0;
-  jpz2 = kNPzBins - 1;
-  do {
-    midBin = (jpz1 + jpz2)/2;
-    if (daughterPz/CLHEP::GeV < fPzVec[midBin] )
-      jpz2 = midBin;
-    else
-      jpz1 = midBin;
-  } while (jpz2 - jpz1 > 1);
-
-  // Find pt bin (jpt1)
-  jpt1 = 0;
-  jpt2 = kNPtBins - 1;
-  do {
-    midBin = (jpt1 + jpt2)/2;
-    if (daughterPt/CLHEP::GeV < fPtVec[midBin])
-      jpt2 = midBin;
-    else
-      jpt1 = midBin;
-  } while (jpt2 - jpt1 > 1);
-
-  // interpolated value (XSecValue)
-  // 0th order
-  ZerothOrderValue = XSecArray[jprotonp1][jpz1][jpt1]
-    *(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
-  // 1st order
-  FirstOrderCorrection_x = ((XSecArray[jprotonp1][jpz2][jpt1]
-			     - XSecArray[jprotonp1][jpz1][jpt1])
-			    * (daughterPz/CLHEP::GeV-fPzVec[jpz1])
-			    / (fPzVec[jpz2]-fPzVec[jpz1]))
-    *(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
-  FirstOrderCorrection_y = ((XSecArray[jprotonp1][jpz1][jpt2]
-			     - XSecArray[jprotonp1][jpz1][jpt1])
-			    * (daughterPt/CLHEP::GeV-fPtVec[jpt1])
-			    / (fPtVec[jpt2]-fPtVec[jpt1]))
-    *(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
-  if (kNProtonMomentumBins > 1) {
-    FirstOrderCorrection_z = ((XSecArray[jprotonp2][jpz1][jpt1]
-			       - XSecArray[jprotonp1][jpz1][jpt1])
-			      * (protonMomentum/CLHEP::GeV-fProtonMomentumBins[jprotonp1])
-			      / (fProtonMomentumBins[jprotonp2]-fProtonMomentumBins[jprotonp1]))
+G4double BooNEpBeInteraction::GetInterpolatedXSec(G4double Array[kNProtonMomentumBins][kNPzBins][kNPtBins],
+    G4double protonMomentum,G4double daughterPz,G4double daughterPt) {
+  return boone_table::interpolate<kNPzBins,kNPtBins>(Array,fProtonMomentumBins,kNProtonMomentumBins,
+      fPzVec,fPtVec,protonMomentum/CLHEP::GeV,daughterPz/CLHEP::GeV,daughterPt/CLHEP::GeV)
       *(CLHEP::millibarn/(CLHEP::GeV*CLHEP::GeV));
-  } else {
-    FirstOrderCorrection_z = 0.;
-  }
-
-  FirstOrderCorrection = (FirstOrderCorrection_x
-			  + FirstOrderCorrection_y
-			  + FirstOrderCorrection_z);
-
-  return ZerothOrderValue + FirstOrderCorrection;
 }
 
 G4double BooNEpBeInteraction::GetInverseRwgtFactor(G4double protonMomentum,
@@ -1916,11 +1836,7 @@ G4double BooNEpBeInteraction::GetInverseRwgtFactor(G4double protonMomentum,
   if (rwgtXSec > 0.) {
     rwgtFactor = noWgtXSec / rwgtXSec;
   } else {
-    G4cout << "ERROR:  rwgtXSec (=" << rwgtXSec
-	   << ") <= 0, noWgtXSec =" << noWgtXSec << G4endl;
-    G4cout << "        protonMomentum, pz, pt = " << protonMomentum << ", "
-	   << daughterPz << ", " << daughterPt << G4endl;
-    rwgtFactor = 1.;
+    throw std::runtime_error("Sampled production point has no positive proposal support");
   }
 
   return rwgtFactor;
@@ -2018,10 +1934,7 @@ G4long BooNEpBeInteraction::GetNumberOfProtons(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = ProtonAvMult[jprotonp1]
-      + (ProtonAvMult[jprotonp2] - ProtonAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(ProtonAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = ProtonAvMult[0];
   }
@@ -2086,10 +1999,7 @@ G4long BooNEpBeInteraction::GetNumberOfNeutrons(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = NeutronAvMult[jprotonp1]
-      + (NeutronAvMult[jprotonp2] - NeutronAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(NeutronAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = NeutronAvMult[0];
   }
@@ -2155,10 +2065,7 @@ G4long BooNEpBeInteraction::GetNumberOfPiPluses(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = PiPlusAvMult[jprotonp1]
-      + (PiPlusAvMult[jprotonp2] - PiPlusAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(PiPlusAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = PiPlusAvMult[0];
   }
@@ -2223,10 +2130,7 @@ G4long BooNEpBeInteraction::GetNumberOfPiMinuses(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = PiMinusAvMult[jprotonp1]
-      + (PiMinusAvMult[jprotonp2] - PiMinusAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(PiMinusAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = PiMinusAvMult[0];
   }
@@ -2290,10 +2194,7 @@ G4long BooNEpBeInteraction::GetNumberOfKPluses(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = KPlusAvMult[jprotonp1]
-      + (KPlusAvMult[jprotonp2] - KPlusAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(KPlusAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = KPlusAvMult[0];
   }
@@ -2357,10 +2258,7 @@ G4long BooNEpBeInteraction::GetNumberOfKMinuses(const G4HadProjectile &aTrack){
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = KMinusAvMult[jprotonp1]
-      + (KMinusAvMult[jprotonp2] - KMinusAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(KMinusAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = KMinusAvMult[0];
   }
@@ -2425,10 +2323,7 @@ G4long BooNEpBeInteraction::GetNumberOfKZeroLongs(const G4HadProjectile &aTrack)
 	jprotonp1 = midBin;
     } while (jprotonp2 - jprotonp1 > 1);
 
-    avMult = KZeroLongAvMult[jprotonp1]
-      + (KZeroLongAvMult[jprotonp2] - KZeroLongAvMult[jprotonp1])
-      * (protonMomentum/CLHEP::GeV - fProtonMomentumBins[jprotonp1])
-      / (fProtonMomentumBins[jprotonp2] - fProtonMomentumBins[jprotonp1]);
+    avMult = boone_table::linear(KZeroLongAvMult,fProtonMomentumBins,kNProtonMomentumBins,protonMomentum/CLHEP::GeV);
   } else {
     avMult = KZeroLongAvMult[0];
   }
